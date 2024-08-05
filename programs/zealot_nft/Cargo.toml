@@ -18,3 +18,7 @@ idl-build = ["anchor-lang/idl-build"]
 
 [dependencies]
 anchor-lang = "0.30.1"
+solana-program = "=1.17.31"
+anchor-spl = "=0.29.0"
+oapp = { git = "https://github.com/LayerZero-Labs/LayerZero-v2.git", branch = "main" }
+utils = { git = "https://github.com/LayerZero-Labs/LayerZero-v2.git", branch = "main" }

@@ -1,145 +1,125 @@
-use {
-    anchor_lang::prelude::*,
-    anchor_spl::{
-        associated_token::AssociatedToken,
-        metadata::{
-            create_master_edition_v3, create_metadata_accounts_v3,
-            mpl_token_metadata::types::DataV2, CreateMasterEditionV3, CreateMetadataAccountsV3,
-            Metadata,
-        },
-        token::{mint_to, Mint, MintTo, Token, TokenAccount},
-    },
+use anchor_lang::prelude::*;
+
+pub mod compose_msg_codec;
+mod errors;
+mod events;
+mod instructions;
+pub mod msg_codec;
+pub mod state;
+
+use errors::*;
+use events::*;
+use instructions::*;
+use oapp::{
+    endpoint::{MessagingFee, MessagingReceipt},
+    LzReceiveParams,
 };
-declare_id!("BtWXBRL8n79mjRQhY9S4j1FpXJp8UJvcRaT3pZnfquxo");
+use state::*;
+
+declare_id!("HRPXLCqspQocTjfcX4rvAPaY9q6Gwb1rrD3xXWrfJWdW");
+
+pub const ONft_VERSION: u64 = 1;
+pub const ONft_SDK_VERSION: u64 = 1;
+pub const ONft_SEED: &[u8] = b"ONft";
+pub const PEER_SEED: &[u8] = b"Peer";
+pub const ENFORCED_OPTIONS_SEED: &[u8] = b"EnforcedOptions";
+pub const LZ_RECEIVE_TYPES_SEED: &[u8] = oapp::LZ_RECEIVE_TYPES_SEED;
 
 #[program]
-pub mod zealot_nft {
+pub mod ONft {
     use super::*;
 
-    pub fn mint_nft(
-        ctx: Context<CreateToken>,
-        nft_name: String,
-        nft_symbol: String,
-        nft_uri: String,
+    pub fn version(_ctx: Context<GetVersion>) -> Result<Version> {
+        Ok(Version {
+            sdk_version: ONft_SDK_VERSION,
+            ONft_version: ONft_VERSION,
+        })
+    }
+
+    pub fn init_ONft(mut ctx: Context<InitONft>, params: InitONftParams) -> Result<()> {
+        InitONft::apply(&mut ctx, &params)
+    }
+
+    pub fn init_adapter_ONft(
+        mut ctx: Context<InitAdapterONft>,
+        params: InitAdapterONftParams,
     ) -> Result<()> {
-        msg!("Minting Token");
-        // Cross Program Invocation (CPI)
-        // Invoking the mint_to instruction on the token program
-        mint_to(
-            CpiContext::new(
-                ctx.accounts.token_program.to_account_info(),
-                MintTo {
-                    mint: ctx.accounts.mint_account.to_account_info(),
-                    to: ctx.accounts.associated_token_account.to_account_info(),
-                    authority: ctx.accounts.payer.to_account_info(),
-                },
-            ),
-            1,
-        )?;
+        InitAdapterONft::apply(&mut ctx, &params)
+    }
 
-        msg!("Creating metadata account");
-        // Cross Program Invocation (CPI)
-        // Invoking the create_metadata_account_v3 instruction on the token metadata program
-        create_metadata_accounts_v3(
-            CpiContext::new(
-                ctx.accounts.token_metadata_program.to_account_info(),
-                CreateMetadataAccountsV3 {
-                    metadata: ctx.accounts.metadata_account.to_account_info(),
-                    mint: ctx.accounts.mint_account.to_account_info(),
-                    mint_authority: ctx.accounts.payer.to_account_info(),
-                    update_authority: ctx.accounts.payer.to_account_info(),
-                    payer: ctx.accounts.payer.to_account_info(),
-                    system_program: ctx.accounts.system_program.to_account_info(),
-                    rent: ctx.accounts.rent.to_account_info(),
-                },
-            ),
-            DataV2 {
-                name: nft_name,
-                symbol: nft_symbol,
-                uri: nft_uri,
-                seller_fee_basis_points: 0,
-                creators: None,
-                collection: None,
-                uses: None,
-            },
-            false, // Is mutable
-            true,  // Update authority is signer
-            None,  // Collection details
-        )?;
+    // ============================== Admin ==============================
+    pub fn transfer_admin(
+        mut ctx: Context<TransferAdmin>,
+        params: TransferAdminParams,
+    ) -> Result<()> {
+        TransferAdmin::apply(&mut ctx, &params)
+    }
 
-        msg!("Creating master edition account");
-        // Cross Program Invocation (CPI)
-        // Invoking the create_master_edition_v3 instruction on the token metadata program
-        create_master_edition_v3(
-            CpiContext::new(
-                ctx.accounts.token_metadata_program.to_account_info(),
-                CreateMasterEditionV3 {
-                    edition: ctx.accounts.edition_account.to_account_info(),
-                    mint: ctx.accounts.mint_account.to_account_info(),
-                    update_authority: ctx.accounts.payer.to_account_info(),
-                    mint_authority: ctx.accounts.payer.to_account_info(),
-                    payer: ctx.accounts.payer.to_account_info(),
-                    metadata: ctx.accounts.metadata_account.to_account_info(),
-                    token_program: ctx.accounts.token_program.to_account_info(),
-                    system_program: ctx.accounts.system_program.to_account_info(),
-                    rent: ctx.accounts.rent.to_account_info(),
-                },
-            ),
-            None, // Max Supply
-        )?;
+    pub fn set_peer(mut ctx: Context<SetPeer>, params: SetPeerParams) -> Result<()> {
+        SetPeer::apply(&mut ctx, &params)
+    }
 
-        msg!("NFT minted successfully.");
+    pub fn set_enforced_options(
+        mut ctx: Context<SetEnforcedOptions>,
+        params: SetEnforcedOptionsParams,
+    ) -> Result<()> {
+        SetEnforcedOptions::apply(&mut ctx, &params)
+    }
 
-        Ok(())
+    pub fn set_mint_authority(
+        mut ctx: Context<SetMintAuthority>,
+        params: SetMintAuthorityParams,
+    ) -> Result<()> {
+        SetMintAuthority::apply(&mut ctx, &params)
+    }
+
+    pub fn mint_to(mut ctx: Context<MintTo>, params: MintToParams) -> Result<()> {
+        MintTo::apply(&mut ctx, &params)
+    }
+
+    // ============================== Public ==============================
+
+    pub fn quote_ONft(ctx: Context<QuoteONft>, params: QuoteONftParams) -> Result<QuoteONftResult> {
+        QuoteONft::apply(&ctx, &params)
+    }
+
+    pub fn quote(ctx: Context<Quote>, params: QuoteParams) -> Result<MessagingFee> {
+        Quote::apply(&ctx, &params)
+    }
+
+    pub fn send(mut ctx: Context<Send>, params: SendParams) -> Result<MessagingReceipt> {
+        Send::apply(&mut ctx, &params)
+    }
+
+    pub fn lz_receive(mut ctx: Context<LzReceive>, params: LzReceiveParams) -> Result<()> {
+        LzReceive::apply(&mut ctx, &params)
+    }
+
+    pub fn lz_receive_types(
+        ctx: Context<LzReceiveTypes>,
+        params: LzReceiveParams,
+    ) -> Result<Vec<oapp::endpoint_cpi::LzAccount>> {
+        LzReceiveTypes::apply(&ctx, &params)
+    }
+
+    pub fn set_rate_limit(
+        mut ctx: Context<SetRateLimit>,
+        params: SetRateLimitParams,
+    ) -> Result<()> {
+        SetRateLimit::apply(&mut ctx, &params)
+    }
+
+    // Set the LayerZero endpoint delegate for OApp admin functions
+    pub fn set_delegate(mut ctx: Context<SetDelegate>, params: SetDelegateParams) -> Result<()> {
+        SetDelegate::apply(&mut ctx, &params)
     }
 }
 
 #[derive(Accounts)]
-pub struct CreateToken<'info> {
-    #[account(mut)]
-    pub payer: Signer<'info>,
+pub struct GetVersion {}
 
-    /// CHECK: Validate address by deriving pda
-    #[account(
-        mut,
-        seeds = [b"metadata", token_metadata_program.key().as_ref(), mint_account.key().as_ref()],
-        bump,
-        seeds::program = token_metadata_program.key(),
-    )]
-    pub metadata_account: UncheckedAccount<'info>,
-
-    /// CHECK: Validate address by deriving pda
-    #[account(
-        mut,
-        seeds = [b"metadata", token_metadata_program.key().as_ref(), mint_account.key().as_ref(), b"edition"],
-        bump,
-        seeds::program = token_metadata_program.key(),
-    )]
-    pub edition_account: UncheckedAccount<'info>,
-
-    // Create new mint account, NFTs have 0 decimals
-    #[account(
-        init,
-        payer = payer,
-        mint::decimals = 0,
-        mint::authority = payer.key(),
-        mint::freeze_authority = payer.key(),
-    )]
-    pub mint_account: Account<'info, Mint>,
-
-    // Create associated token account, if needed
-    // This is the account that will hold the NFT
-    #[account(
-        init_if_needed,
-        payer = payer,
-        associated_token::mint = mint_account,
-        associated_token::authority = payer,
-    )]
-    pub associated_token_account: Account<'info, TokenAccount>,
-
-    pub token_program: Program<'info, Token>,
-    pub token_metadata_program: Program<'info, Metadata>,
-    pub associated_token_program: Program<'info, AssociatedToken>,
-    pub system_program: Program<'info, System>,
-    pub rent: Sysvar<'info, Rent>,
+#[derive(Clone, AnchorSerialize, AnchorDeserialize)]
+pub struct Version {
+    pub sdk_version: u64,
+    pub ONft_version: u64,
 }
