@@ -1,5 +1,5 @@
 pub mod enforced_options;
-pub mod ONft;
+pub mod onft;
 pub mod peer;
 
 pub use enforced_options::*;
